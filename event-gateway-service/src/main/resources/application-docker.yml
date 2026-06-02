@@ -1,0 +1,4 @@
+server:
+  port: 8080
+account-service:
+  base-url: ${ACCOUNT_SERVICE_BASE_URL:http://account-service:8081}

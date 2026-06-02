@@ -1,0 +1,96 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: event-gateway
+  datasource:
+    url: jdbc:h2:mem:gatewaydb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  h2:
+    console:
+      enabled: false
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+account-service:
+  base-url: http://localhost:8081
+  connect-timeout-ms: 3000
+  read-timeout-ms: 5000
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Resilience4j Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+resilience4j:
+  circuitbreaker:
+    instances:
+      accountService:
+        # Open the circuit after 50% failure rate over a 10-call sliding window
+        failure-rate-threshold: 50
+        # Slow calls (>3s) also count as failures
+        slow-call-rate-threshold: 80
+        slow-call-duration-threshold: 3s
+        # Minimum calls before rate threshold can trigger
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        sliding-window-type: COUNT_BASED
+        # Wait 15s in OPEN state before probing with one request (HALF_OPEN)
+        wait-duration-in-open-state: 15s
+        permitted-number-of-calls-in-half-open-state: 2
+        # These exceptions trigger the breaker; 4xx client errors do NOT
+        record-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - java.net.SocketTimeoutException
+          - java.io.IOException
+        ignore-exceptions:
+          - com.eventledger.gateway.exception.AccountServiceException
+
+  retry:
+    instances:
+      accountService:
+        max-attempts: 3
+        # Exponential backoff: 500ms → 1000ms → 2000ms
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - java.net.SocketTimeoutException
+        ignore-exceptions:
+          - com.eventledger.gateway.exception.AccountServiceException
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,circuitbreakers
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.90, 0.95, 0.99
+
+logging:
+  level:
+    root: INFO
+    com.eventledger: DEBUG
+    io.github.resilience4j: DEBUG
+    org.springframework.web.client: DEBUG
