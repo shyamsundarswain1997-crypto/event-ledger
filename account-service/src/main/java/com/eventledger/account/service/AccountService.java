@@ -20,6 +20,8 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
+    private final AccountMetricsService metricsService;
+
     /**
      * Applies a transaction to an account.
      *
@@ -41,6 +43,7 @@ public class AccountService {
         Optional<Transaction> existing = transactionRepository.findByEventId(request.getEventId());
         if (existing.isPresent()) {
             log.info("Duplicate transaction detected eventId={} — returning existing record", request.getEventId());
+            metricsService.incrementDuplicateTransactions();
             return toTransactionResponse(existing.get(), true);
         }
 
@@ -66,6 +69,7 @@ public class AccountService {
         account.setBalance(newBalance);
         accountRepository.save(account);
 
+        metricsService.incrementTransactionsProcessed(request.getType().name());
         log.info("Transaction applied successfully eventId={} newBalance={}", request.getEventId(), newBalance);
         return toTransactionResponse(transaction, false);
     }
