@@ -1,4 +1,7 @@
 server:
+  error:
+    include-message: always
+    include-stacktrace: always
   port: 8081
   shutdown: graceful
 
